@@ -194,61 +194,81 @@ mark{background:#FFF176;color:var(--dark);border-radius:2px;padding:0 1px}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▼▼▼
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzSlQJ4G5DcH7QCNBksUkCdqeh8prJdB85FcodHwLyyIuZFUR32-3FkyT8o1_W7n8Dr/exec';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_3beL5-gQhDp1aX7DYAFbfmbgKfSF29h1-5WRIPGvBfHb8sYIYIKjYeip-rub1pnA/exec';
 //  ▲▲▲  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
-// Mapa tab → nombre de función en GAS
-var ACTION_MAP = {
-  des: 'getDesgloseCotizacionesData',
-  fmt: 'getFormatoCotizacionesData'
-};
-
 // ══════════════════════════════════════════════════════════════
-//  CARGAR TAB — JSONP exactamente igual al CRM Bombas
+//  UNA SOLA LLAMADA JSONP trae DES y FMT juntas
+//  GAS responde: fn({ des:[...], fmt:[...] })
 // ══════════════════════════════════════════════════════════════
-function cargarTab(tab, onDone) {
-  const ld = document.getElementById(tab+'-loader');
-  const tc = document.getElementById(tab+'-tc');
-  ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
-  ld.style.display = 'flex';
-  tc.style.display  = 'none';
+function cargarTodo() {
+  // Mostrar spinner en ambos tabs
+  ['des','fmt'].forEach(function(tab) {
+    const ld = document.getElementById(tab+'-loader');
+    const tc = document.getElementById(tab+'-tc');
+    ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
+    ld.style.display = 'flex';
+    tc.style.display = 'none';
+  });
 
-  const cbName  = 'liniCb_'+tab+'_'+Date.now();
-  const timeout = setTimeout(() => {
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado (45 s). Verifica la URL de Apps Script.</p>';
+  const cbName  = 'liniCb_all_' + Date.now();
+  const timeout = setTimeout(function() {
     delete window[cbName];
-    if (onDone) onDone();
-  }, 45000);
+    ['des','fmt'].forEach(function(tab) {
+      document.getElementById(tab+'-loader').innerHTML =
+        '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado (60 s).</p>';
+    });
+  }, 60000);
 
-  window[cbName] = function(rows) {
+  window[cbName] = function(data) {
     clearTimeout(timeout);
     delete window[cbName];
-    if (rows && rows.ok === false) {
-      // GAS devolvió un objeto de error
-      ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error GAS: ' + (rows.error || rows.msg || 'desconocido') + '</p>';
-      if (onDone) onDone();
+
+    // Si GAS devolvió error
+    if (data && data.ok === false) {
+      ['des','fmt'].forEach(function(tab) {
+        document.getElementById(tab+'-loader').innerHTML =
+          '<p style="color:#e74c3c;padding:20px">❌ Error GAS: ' + (data.error || data.msg || 'desconocido') + '</p>';
+      });
       return;
     }
-    S[tab].raw     = Array.isArray(rows) ? rows : [];
-    S[tab].filters = initFilters();
-    document.getElementById(tab+'-search').value = '';
-    rebuildAll(tab);
-    ld.style.display = 'none';
-    tc.style.display  = 'block';
+
+    // Cargar DES
+    S['des'].raw     = Array.isArray(data.des) ? data.des : [];
+    S['des'].filters = initFilters();
+    document.getElementById('des-search').value = '';
+    rebuildAll('des');
+    document.getElementById('des-loader').style.display = 'none';
+    document.getElementById('des-tc').style.display     = 'block';
+
+    // Cargar FMT
+    S['fmt'].raw     = Array.isArray(data.fmt) ? data.fmt : [];
+    S['fmt'].filters = initFilters();
+    document.getElementById('fmt-search').value = '';
+    rebuildAll('fmt');
+    document.getElementById('fmt-loader').style.display = 'none';
+    document.getElementById('fmt-tc').style.display     = 'block';
+
     setUpdateDate();
-    if (onDone) onDone();
   };
 
   const s   = document.createElement('script');
-  s.src     = APPS_SCRIPT_URL + '?action=' + ACTION_MAP[tab] + '&callback=' + cbName + '&t=' + Date.now();
-  s.onerror = () => {
+  s.src     = APPS_SCRIPT_URL + '?action=getAllData&callback=' + cbName + '&t=' + Date.now();
+  s.onerror = function() {
     clearTimeout(timeout);
     delete window[cbName];
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error de red al llamar GAS. Acción: ' + ACTION_MAP[tab] + '</p>';
-    if (onDone) onDone();
+    ['des','fmt'].forEach(function(tab) {
+      document.getElementById(tab+'-loader').innerHTML =
+        '<p style="color:#e74c3c;padding:20px">❌ Error de red. Verifica la URL o los permisos del despliegue.</p>';
+    });
   };
   document.head.appendChild(s);
+}
+
+// cargarTab sigue funcionando para el botón Actualizar de cada tab
+function cargarTab(tab) {
+  cargarTodo();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -512,8 +532,7 @@ function setUpdateDate(){
 // ══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setUpdateDate();
-  // Carga en secuencia: des primero, fmt cuando des termina
-  cargarTab('des', function(){ cargarTab('fmt'); });
+  cargarTodo(); // Una sola llamada GAS trae ambas hojas
 });
 </script>
 </body>
