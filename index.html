@@ -195,7 +195,7 @@ mark{background:#FFF176;color:var(--dark);border-radius:2px;padding:0 1px}
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY  ▼▼▼
 var GAS_URL_DES = 'https://script.google.com/macros/s/AKfycbzLlRctacH2nFMAvDlw11sCzY3nSR6yOHX2vzgnysyJ-0VUNbffvbpXaTOeAJefGnd2/exec';   // Script 1 — Desglose
-var GAS_URL_FMT = 'https://script.google.com/macros/s/AKfycbxTPSO4rpeFb4g6g6wL7SaLcP9rqX8SAVF3MOqAmKyG1zqyUipMnoHrlR5wnuytcyqiKg/exec';    // Script 2 — Formato
+var GAS_URL_FMT = 'https://script.google.com/macros/s/AKfycbxbFK2IeL2O8pwOkajD-6I1M9OBYbAbt9jN5oFqB__Q_qLcfL-WFQRCN6zYwNeUgHObcg/exec';    // Script 2 — Formato
 //  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -212,47 +212,34 @@ var ACTION_MAP = {
 };
 
 function cargarTab(tab, onDone) {
-  const ld = document.getElementById(tab+'-loader');
-  const tc = document.getElementById(tab+'-tc');
-  ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
+  const ld  = document.getElementById(tab+'-loader');
+  const tc  = document.getElementById(tab+'-tc');
+  ld.innerHTML     = '<div class="spinner"></div><span>Cargando...</span>';
   ld.style.display = 'flex';
   tc.style.display = 'none';
 
-  const cbName = 'liniCb_'+tab+'_'+Date.now();
+  const url = URL_MAP[tab]() + '?action=' + ACTION_MAP[tab] + '&t=' + Date.now();
 
-  const timer = setTimeout(function() {
-    delete window[cbName];
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Sin respuesta (60 s). Verifica la URL del deploy.</p>';
-    if (onDone) onDone();
-  }, 60000);
-
-  window[cbName] = function(rows) {
-    clearTimeout(timer);
-    delete window[cbName];
-    if (rows && rows.ok === false) {
-      ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error GAS: '+(rows.error||rows.msg||'?')+'</p>';
+  fetch(url)
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(rows) {
+      if (rows && rows.ok === false) throw new Error(rows.error || rows.msg || 'Error GAS');
+      S[tab].raw     = Array.isArray(rows) ? rows : [];
+      S[tab].filters = initFilters();
+      document.getElementById(tab+'-search').value = '';
+      rebuildAll(tab);
+      ld.style.display = 'none';
+      tc.style.display = 'block';
+      setUpdateDate();
       if (onDone) onDone();
-      return;
-    }
-    S[tab].raw     = Array.isArray(rows) ? rows : [];
-    S[tab].filters = initFilters();
-    document.getElementById(tab+'-search').value = '';
-    rebuildAll(tab);
-    ld.style.display = 'none';
-    tc.style.display = 'block';
-    setUpdateDate();
-    if (onDone) onDone();
-  };
-
-  const s   = document.createElement('script');
-  s.src     = URL_MAP[tab]() + '?action=' + ACTION_MAP[tab] + '&callback=' + cbName + '&t=' + Date.now();
-  s.onerror = function() {
-    clearTimeout(timer);
-    delete window[cbName];
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error de red en tab ['+tab+']. Verifica GAS_URL_'+tab.toUpperCase()+'.</p>';
-    if (onDone) onDone();
-  };
-  document.head.appendChild(s);
+    })
+    .catch(function(err) {
+      ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error ['+tab+']: ' + err.message + '</p>';
+      if (onDone) onDone();
+    });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -516,8 +503,9 @@ function setUpdateDate(){
 // ══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setUpdateDate();
-  // Carga secuencial: des con su URL, luego fmt con la suya
-  cargarTab('des', function(){ cargarTab('fmt'); });
+  // Carga paralela — cada tab usa su propia URL independiente
+  cargarTab('des');
+  cargarTab('fmt');
 });
 </script>
 </body>
