@@ -207,7 +207,7 @@ var ACTION_MAP = {
 // ══════════════════════════════════════════════════════════════
 //  CARGAR TAB — JSONP exactamente igual al CRM Bombas
 // ══════════════════════════════════════════════════════════════
-function cargarTab(tab) {
+function cargarTab(tab, onDone) {
   const ld = document.getElementById(tab+'-loader');
   const tc = document.getElementById(tab+'-tc');
   ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
@@ -216,13 +216,20 @@ function cargarTab(tab) {
 
   const cbName  = 'liniCb_'+tab+'_'+Date.now();
   const timeout = setTimeout(() => {
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado. Verifica la URL de Apps Script.</p>';
+    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado (45 s). Verifica la URL de Apps Script.</p>';
     delete window[cbName];
+    if (onDone) onDone();
   }, 45000);
 
   window[cbName] = function(rows) {
     clearTimeout(timeout);
     delete window[cbName];
+    if (rows && rows.ok === false) {
+      // GAS devolvió un objeto de error
+      ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error GAS: ' + (rows.error || rows.msg || 'desconocido') + '</p>';
+      if (onDone) onDone();
+      return;
+    }
     S[tab].raw     = Array.isArray(rows) ? rows : [];
     S[tab].filters = initFilters();
     document.getElementById(tab+'-search').value = '';
@@ -230,14 +237,16 @@ function cargarTab(tab) {
     ld.style.display = 'none';
     tc.style.display  = 'block';
     setUpdateDate();
+    if (onDone) onDone();
   };
 
-  const s    = document.createElement('script');
-  s.src      = APPS_SCRIPT_URL + '?action=' + ACTION_MAP[tab] + '&callback=' + cbName;
-  s.onerror  = () => {
+  const s   = document.createElement('script');
+  s.src     = APPS_SCRIPT_URL + '?action=' + ACTION_MAP[tab] + '&callback=' + cbName + '&t=' + Date.now();
+  s.onerror = () => {
     clearTimeout(timeout);
-    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error de red. Verifica la URL o los permisos del despliegue.</p>';
     delete window[cbName];
+    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error de red al llamar GAS. Acción: ' + ACTION_MAP[tab] + '</p>';
+    if (onDone) onDone();
   };
   document.head.appendChild(s);
 }
@@ -503,8 +512,8 @@ function setUpdateDate(){
 // ══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setUpdateDate();
-  cargarTab('des');
-  cargarTab('fmt');
+  // Carga en secuencia: des primero, fmt cuando des termina
+  cargarTab('des', function(){ cargarTab('fmt'); });
 });
 </script>
 </body>
