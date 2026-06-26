@@ -194,7 +194,7 @@ mark{background:#FFF176;color:var(--dark);border-radius:2px;padding:0 1px}
 <script>
 // ══════════════════════════════════════════════════════════════
 //  ▼▼▼  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▼▼▼
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1S5aYWl0zsIXDKeOJaFli1fs6tqofl1PsZVjRrkyqmEEf3BDnLmSjLI4Qb3R8wQJK/exec';
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzSlQJ4G5DcH7QCNBksUkCdqeh8prJdB85FcodHwLyyIuZFUR32-3FkyT8o1_W7n8Dr/exec';
 //  ▲▲▲  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
@@ -218,7 +218,7 @@ function cargarTab(tab) {
   const timeout = setTimeout(() => {
     ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado. Verifica la URL de Apps Script.</p>';
     delete window[cbName];
-  }, 15000);
+  }, 45000);
 
   window[cbName] = function(rows) {
     clearTimeout(timeout);
