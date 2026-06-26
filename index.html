@@ -193,82 +193,66 @@ mark{background:#FFF176;color:var(--dark);border-radius:2px;padding:0 1px}
 
 <script>
 // ══════════════════════════════════════════════════════════════
-//  ▼▼▼  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▼▼▼
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_3beL5-gQhDp1aX7DYAFbfmbgKfSF29h1-5WRIPGvBfHb8sYIYIKjYeip-rub1pnA/exec';
-//  ▲▲▲  ÚNICA LÍNEA QUE DEBES ACTUALIZAR CON CADA NUEVO DEPLOY  ▲▲▲
+//  ▼▼▼  ACTUALIZAR CON CADA NUEVO DEPLOY  ▼▼▼
+var GAS_URL_DES = 'https://script.google.com/macros/s/AKfycbzLlRctacH2nFMAvDlw11sCzY3nSR6yOHX2vzgnysyJ-0VUNbffvbpXaTOeAJefGnd2/exec';   // Script 1 — Desglose
+var GAS_URL_FMT = 'https://script.google.com/macros/s/AKfycbxTPSO4rpeFb4g6g6wL7SaLcP9rqX8SAVF3MOqAmKyG1zqyUipMnoHrlR5wnuytcyqiKg/exec';    // Script 2 — Formato
+//  ▲▲▲  ACTUALIZAR CON CADA NUEVO DEPLOY  ▲▲▲
 // ══════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════
-//  UNA SOLA LLAMADA JSONP trae DES y FMT juntas
-//  GAS responde: fn({ des:[...], fmt:[...] })
+//  JSONP — carga UN tab con su propia URL
 // ══════════════════════════════════════════════════════════════
-function cargarTodo() {
-  // Mostrar spinner en ambos tabs
-  ['des','fmt'].forEach(function(tab) {
-    const ld = document.getElementById(tab+'-loader');
-    const tc = document.getElementById(tab+'-tc');
-    ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
-    ld.style.display = 'flex';
-    tc.style.display = 'none';
-  });
+var URL_MAP = {
+  des: function(){ return GAS_URL_DES; },
+  fmt: function(){ return GAS_URL_FMT; }
+};
+var ACTION_MAP = {
+  des: 'getDesgloseCotizacionesData',
+  fmt: 'getFormatoCotizacionesData'
+};
 
-  const cbName  = 'liniCb_all_' + Date.now();
-  const timeout = setTimeout(function() {
+function cargarTab(tab, onDone) {
+  const ld = document.getElementById(tab+'-loader');
+  const tc = document.getElementById(tab+'-tc');
+  ld.innerHTML = '<div class="spinner"></div><span>Cargando...</span>';
+  ld.style.display = 'flex';
+  tc.style.display = 'none';
+
+  const cbName = 'liniCb_'+tab+'_'+Date.now();
+
+  const timer = setTimeout(function() {
     delete window[cbName];
-    ['des','fmt'].forEach(function(tab) {
-      document.getElementById(tab+'-loader').innerHTML =
-        '<p style="color:#e74c3c;padding:20px">⚠️ Tiempo de espera agotado (60 s).</p>';
-    });
+    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">⚠️ Sin respuesta (60 s). Verifica la URL del deploy.</p>';
+    if (onDone) onDone();
   }, 60000);
 
-  window[cbName] = function(data) {
-    clearTimeout(timeout);
+  window[cbName] = function(rows) {
+    clearTimeout(timer);
     delete window[cbName];
-
-    // Si GAS devolvió error
-    if (data && data.ok === false) {
-      ['des','fmt'].forEach(function(tab) {
-        document.getElementById(tab+'-loader').innerHTML =
-          '<p style="color:#e74c3c;padding:20px">❌ Error GAS: ' + (data.error || data.msg || 'desconocido') + '</p>';
-      });
+    if (rows && rows.ok === false) {
+      ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error GAS: '+(rows.error||rows.msg||'?')+'</p>';
+      if (onDone) onDone();
       return;
     }
-
-    // Cargar DES
-    S['des'].raw     = Array.isArray(data.des) ? data.des : [];
-    S['des'].filters = initFilters();
-    document.getElementById('des-search').value = '';
-    rebuildAll('des');
-    document.getElementById('des-loader').style.display = 'none';
-    document.getElementById('des-tc').style.display     = 'block';
-
-    // Cargar FMT
-    S['fmt'].raw     = Array.isArray(data.fmt) ? data.fmt : [];
-    S['fmt'].filters = initFilters();
-    document.getElementById('fmt-search').value = '';
-    rebuildAll('fmt');
-    document.getElementById('fmt-loader').style.display = 'none';
-    document.getElementById('fmt-tc').style.display     = 'block';
-
+    S[tab].raw     = Array.isArray(rows) ? rows : [];
+    S[tab].filters = initFilters();
+    document.getElementById(tab+'-search').value = '';
+    rebuildAll(tab);
+    ld.style.display = 'none';
+    tc.style.display = 'block';
     setUpdateDate();
+    if (onDone) onDone();
   };
 
   const s   = document.createElement('script');
-  s.src     = APPS_SCRIPT_URL + '?action=getAllData&callback=' + cbName + '&t=' + Date.now();
+  s.src     = URL_MAP[tab]() + '?action=' + ACTION_MAP[tab] + '&callback=' + cbName + '&t=' + Date.now();
   s.onerror = function() {
-    clearTimeout(timeout);
+    clearTimeout(timer);
     delete window[cbName];
-    ['des','fmt'].forEach(function(tab) {
-      document.getElementById(tab+'-loader').innerHTML =
-        '<p style="color:#e74c3c;padding:20px">❌ Error de red. Verifica la URL o los permisos del despliegue.</p>';
-    });
+    ld.innerHTML = '<p style="color:#e74c3c;padding:20px">❌ Error de red en tab ['+tab+']. Verifica GAS_URL_'+tab.toUpperCase()+'.</p>';
+    if (onDone) onDone();
   };
   document.head.appendChild(s);
-}
-
-// cargarTab sigue funcionando para el botón Actualizar de cada tab
-function cargarTab(tab) {
-  cargarTodo();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -532,7 +516,8 @@ function setUpdateDate(){
 // ══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',function(){
   setUpdateDate();
-  cargarTodo(); // Una sola llamada GAS trae ambas hojas
+  // Carga secuencial: des con su URL, luego fmt con la suya
+  cargarTab('des', function(){ cargarTab('fmt'); });
 });
 </script>
 </body>
